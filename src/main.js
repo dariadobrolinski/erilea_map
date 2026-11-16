@@ -104,6 +104,7 @@ const groundNow = (x, z) => (room ? room.minY - 4 : here ? Math.max(local.height
 
 // ---- labels ----------------------------------------------------------------------------------------
 function worldLabels() {
+  labels.occluders = null;
   const items = [];
   for (const r of REGIONS.filter(visible)) {
     const y = world.groundAt(...r.pos) + (r.kind === 'feature' ? 6 : 10);
@@ -118,7 +119,8 @@ function worldLabels() {
   labels.set(items);
 }
 function localLabels() {
-  labels.set((room || local).pois.filter((poi) => poi.kind !== 'hidden' && poi.notes.some(([b]) => can(b))).map((poi) => ({ text: poi.name, cls: 'poi ' + (poi.kind === 'feature' ? 'feature-poi' : 'capital'), pos: poi.pos, pri: poi.kind === 'feature' ? 10 : 50, onClick: () => selectPoi(poi) })));
+  labels.set((room || local).pois.filter((poi) => poi.kind !== 'hidden' && poi.notes.some(([b]) => can(b))).map((poi) => ({ text: poi.name, cls: 'poi ' + (poi.kind === 'feature' ? 'feature-poi' : 'capital'), pos: poi.pos, at: room ? poi.focus : null, pri: poi.kind === 'feature' ? 10 : 50, onClick: () => selectPoi(poi) })));
+  labels.occluders = room ? room.walls : null; // inside a building, rooms behind walls or floors hide their names
 }
 
 // ---- panel -----------------------------------------------------------------------------------------
@@ -135,7 +137,7 @@ function showPanel(kicker, name, notes, actions, soon) {
     p.className = 'note'; em.textContent = bookTitle(b); p.append(em, text);
     return p;
   }));
-  if (soon) { const s = document.createElement('p'); s.className = 'soon'; s.textContent = soon; $('pNotes').append(s); }
+  $('pSoon').textContent = soon || ''; $('pSoon').hidden = !soon;
   $('pToggle').disabled = !$('pNotes').childElementCount;
   setNotesOpen(notesOpen && !$('pToggle').disabled);
   $('pActions').replaceChildren(...actions.map(([text, fn, primary]) => {
@@ -170,7 +172,7 @@ function crumbs() {
   const c = $('crumbs'), back = $('back'); c.replaceChildren();
   back.hidden = !here;
   if (here) { back.textContent = room ? `Back to ${here.name}` : 'Back to Erilea'; back.onclick = room ? exitRoom : leave; }
-  if (!here) { c.textContent = 'A spoiler-safe atlas of Throne of Glass'; return; }
+  if (!here) { c.textContent = 'A spoiler-safe atlas of Throne of Glass by Sarah J. Maas'; return; }
   const b = document.createElement('button'); b.textContent = 'Erilea'; b.onclick = leave;
   const cur = document.createElement('b'); cur.textContent = room ? room.name : here.name;
   c.append(b, ' › ');
@@ -215,7 +217,7 @@ function walkPanel() {
   showPanel(room.name, poi.name, poi.notes, [
     ['‹ Previous room', () => startWalk(rooms[(i - 1 + rooms.length) % rooms.length])],
     ['Next room ›', () => startWalk(rooms[(i + 1) % rooms.length]), true],
-    ['Look from above', stopWalk],
+    ['See all rooms', stopWalk],
   ], 'Drag to look around. W A S D or the arrow keys to walk, Shift to hurry. Doorways and stairs lead on to the next room.');
   const sky = poi.sky ? (mood === 'Night' ? '#101b2e' : mood === 'Dusk' ? '#d6a184' : '#9cc4dc') : '#0b1013';
   INT.scene.background.set(sky); INT.scene.fog.color.set(sky);

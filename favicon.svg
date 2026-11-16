@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A crown of glass shards in Terrasen gold, on forest green. -->
+  <rect width="64" height="64" rx="14" fill="#0f1a12"/>
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="none" stroke="#e2b43c" stroke-opacity=".45" stroke-width="2"/>
+  <path d="M13 46 L16 24 L24 34 L32 13 L40 34 L48 24 L51 46 Z" fill="#e2b43c"/>
+  <path d="M32 13 L28 34 L32 40 L36 34 Z" fill="#f6d877"/>
+  <path d="M16 24 L19 38 L24 34 Z M48 24 L45 38 L40 34 Z" fill="#f6d877" fill-opacity=".7"/>
+  <rect x="13" y="46" width="38" height="6" rx="1.5" fill="#b8892a"/>
+  <circle cx="32" cy="49" r="1.8" fill="#7fae3e"/>
+</svg>

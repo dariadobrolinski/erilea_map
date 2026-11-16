@@ -4,7 +4,7 @@
 // Notes follow the same spoiler rule as data.js: [book, text], book 0 = The Assassin's Blade.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from '../vendor/RoundedBoxGeometry.js';
-import { rng } from './util.js';
+import { rng, fbm } from './util.js';
 
 const mats = new Map();
 const M = (color, o) => {
@@ -202,7 +202,7 @@ const clamp01 = (v) => Math.max(0, Math.min(1, v));
 // Rooms are joined by real openings: link(a, b) cuts a doorway in both walls and builds the passage or stair between them.
 class House {
   constructor(can = () => true, base = {}) {
-    this.can = can; this.base = base; this.group = new THREE.Group(); this.pois = []; this.rooms = new Map(); this.zones = []; this.solids = []; this.flames = [];
+    this.can = can; this.base = base; this.group = new THREE.Group(); this.pois = []; this.walls = []; this.rooms = new Map(); this.zones = []; this.solids = []; this.flames = [];
     this.fire = new THREE.PointLight('#ff8a3a', 0, 70, 1.5); this.lamp = new THREE.PointLight('#ffd9a8', 0, 170, 1.3);
     this.backdrop = new THREE.Group(); this.backdrop.visible = false;
   }
@@ -255,7 +255,8 @@ class House {
     for (const r of this.rooms.values()) {
       const { x, z, w, d, h, y, o } = r, add = (m) => { this.group.add(m); return m; };
       minY = Math.min(minY, y);
-      const fl = add(quad(w, d, wallMat(o.floorKind || 'planks', o.floor || '#8a7458'), w / 14, d / 14)); fl.rotation.x = -N; fl.position.set(x, y, z);
+      if (o.bare) continue; // the interior builds its own floor and walls (the cave)
+      const fl = add(quad(w, d, wallMat(o.floorKind || 'planks', o.floor || '#8a7458'), w / 14, d / 14)); fl.rotation.x = -N; fl.position.set(x, y, z); this.walls.push(fl);
       const under = add(b(w + 1.2, 0.6, d + 1.2, '#2a2622', x, y - 0.75, z)); under.castShadow = false;
       if (!o.sky) { const c = add(quad(w, d, wallMat('ceiling', o.ceil || '#d8d0c0'), w / 18, d / 18)); c.rotation.x = N; c.position.set(x, y + h, z); }
       const wm = wallMat(o.wallKind || 'panel', o.wall || '#d9d2c2');
@@ -264,7 +265,7 @@ class House {
         const seg = (p, q, ya, yb) => {
           if (q - p < 0.01 || yb - ya < 0.01) return;
           const m = add(quad(q - p, yb - ya, wm, (q - p) / 15, (yb - ya) / h, p / 15, ya / h)), mid = (p + q) / 2;
-          m.rotation.y = rot; m.position.set(ns ? mid : fix, y + (ya + yb) / 2, ns ? fix : mid);
+          m.rotation.y = rot; m.position.set(ns ? mid : fix, y + (ya + yb) / 2, ns ? fix : mid); if (o.wallKind !== 'glass') this.walls.push(m);
         };
         let cur = ns ? r.x0 : r.z0;
         for (const hole of r.holes[side].sort((p, q) => p.c - q.c)) { seg(cur, hole.c - hole.w / 2, 0, h); seg(hole.c - hole.w / 2, hole.c + hole.w / 2, hole.h, h); cur = hole.c + hole.w / 2; }
@@ -284,7 +285,7 @@ class House {
       if (cam && poi) { const B = poi.bounds; this.lamp.color.set(poi.light); this.lamp.intensity = 190 * poi.glow; this.lamp.position.set(cam.x * 0.7 + B.x * 0.3, cam.y - 6.4 + Math.min(B.h * 0.75, 15), cam.z * 0.7 + B.z * 0.3); } else this.lamp.intensity = 0;
       this.backdrop.visible = !!(cam && poi?.sky);
     };
-    return { group: this.group, pois: this.pois, zones: this.zones, solids: this.solids, minY, center: V(c.x, 0, c.z), size: Math.max(s.x, s.z), update, ...extra };
+    return { group: this.group, pois: this.pois, walls: this.walls, zones: this.zones, solids: this.solids, minY, center: V(c.x, 0, c.z), size: Math.max(s.x, s.z), update, ...extra };
   }
 }
 
@@ -350,11 +351,13 @@ function castle(can) {
   ] });
   put(F.dining(5, 22), 0, 2, N); put(F.chandelier(), 0, 2, 0, 8); put(F.hearth(8), 0, 17.2, PI); put(F.banner('#9e1b1b', 9), 17.7, 10, -N, 5); put(F.painting(7, 4.6, '#2a2a33', '#5c1820'), 17.8, -8, -N, 7);
 
-  put = H.room('dorian', 'Dorian’s Tower', [50, -40, 36, 36, 18], { floor: '#6b5140', wall: '#a8a294', wallKind: 'stone', notes: [
-    [1, 'The Crown Prince’s rooms, high in a stone tower of the old castle and buried in books.'],
+  // Dorian's rooms sit at the top of a tower: a long stair climbs to them from the council chamber.
+  put = H.room('dorian', 'Dorian’s Tower', [50, -100, 34, 34, 18, 42], { floor: '#6b5140', wall: '#a8a294', wallKind: 'stone', notes: [
+    [1, 'The Crown Prince’s rooms, at the top of a stone tower of the old castle, up a long climb of stairs, and buried in books.'],
   ] });
-  put(F.bed('#1f3a5a', true), -9, -10); put(F.shelf(10, 12, 8), 9, -17.2); put(F.shelf(10, 12, 9), -17.2, 6, N); put(F.desk(), 6, 0, PI); put(F.rug(14, 10, '#1f3a5a'), -6, 4); put(F.hearth(7), 17.2, 10, -N);
-  put(F.window(5, 9), -4, -17.8, 0, 4); each(6, (i) => put(b(1.6, 0.4 + i * 0.3, 1.2, ['#7a1f2b', '#254a5a', '#8a6a2a'][i % 3]), 11 + (i % 2) * 2, 12 - i * 1.5)); put(F.couch('#1f3a5a'), -8, 13, PI);
+  put(cyl(20, 42, '#8f897c'), 0, 0, 0, -42.6); put(cyl(21.5, 1.2, '#7a756a'), 0, 0, 0, -1.8); each(8, (i) => put(b(2.4, 4, 0.6, glow('#ffe2a8', 0.7)), Math.sin(i * 0.785) * 20.2, Math.cos(i * 0.785) * 20.2, i * 0.785, -30 + (i % 2) * 14));
+  put(F.bed('#1f3a5a', true), -8, -9); put(F.shelf(10, 12, 8), 8, -16.2); put(F.shelf(10, 12, 9), -16.2, 6, N); put(F.desk(), 6, 0, PI); put(F.rug(14, 10, '#1f3a5a'), -6, 4); put(F.hearth(7), 16.2, 9, -N);
+  put(F.window(5, 9), -4, -16.8, 0, 4); each(6, (i) => put(b(1.6, 0.4 + i * 0.3, 1.2, ['#7a1f2b', '#254a5a', '#8a6a2a'][i % 3]), 11 + (i % 2) * 2, 12 - i * 1.5)); put(F.couch('#1f3a5a'), -8, 12, PI);
 
   put = H.room('chaol', 'Chaol’s Rooms', [88, -40, 32, 28, 14], { floor: '#7b5a3c', wall: '#bdb6a6', wallKind: 'stone', notes: [
     [1, 'The Captain of the Guard’s quarters: neat, plain, and barely lived in. He is on duty before dawn and long after dark.'],
@@ -371,8 +374,8 @@ function castle(can) {
   ] });
   put(b(44, 0.3, 28, '#9a7f52'), 0, 2); put(b(40, 0.35, 24, '#c7ae80'), 0, 2);
   each(6, (i) => put(F.rack(), -36 + i * 10, 27.5, PI)); each(4, (i) => put(F.dummy(), 34, -18 + i * 9));
-  each(3, (i) => { put(cyl(3, 0.4, '#e9e2d0'), -24 + i * 12, -27.4, 0, 6).rotation.x = N; put(cyl(1.2, 0.5, '#9e1b1b'), -24 + i * 12, -27.2, 0, 6).rotation.x = N; });
-  put(F.bench(14), 12, -25); put(F.barrel(), -40, -22);
+  each(3, (i) => { put(cyl(3, 0.4, '#e9e2d0'), -2 + i * 12, -27.4, 0, 6).rotation.x = N; put(cyl(1.2, 0.5, '#9e1b1b'), -2 + i * 12, -27.2, 0, 6).rotation.x = N; });
+  put(F.bench(14), 10, -24); put(F.barrel(), -40, -22);
 
   // --- the library
   put = H.room('library', 'The Royal Library', [-163, -17, 150, 130, 38], { floor: '#6b4d38', wall: '#6e5a48', wallKind: 'paper', ceil: '#b9a88c', notes: [
@@ -397,10 +400,21 @@ function castle(can) {
   ] });
   for (let r = 0; r < 4; r++) for (const x of [-22, 6]) { if (r === 2) continue; put(F.stack(24, 11), x, -20 + r * 11); }
   each(4, (i) => put(F.torch(), -30 + i * 20, 27.6, PI)); put(F.table(8, 4), 28, 16); put(F.candles(), 28, 16, 0, 3); each(7, (i) => put(b(1.6, 0.5, 1.2, ['#3a2a22', '#2a3a3a', '#4a3a22'][i % 3]), 20 + (i % 3) * 2.2, -18 + i * 1.7, i));
-  put = H.room('irondoor', 'The Iron Door', [-54, -118, 32, 28, 13, -32], { ...deep, floor: '#45454a', wall: '#4a4a50', glow: 0.6, book: 2, notes: [
-    [2, 'A forgotten passage, sloping down and down, ends here: a door of solid iron, bolted and sealed. The scratches in the metal are on this side. Whatever is behind it has been left alone for a very long time.'],
+  put = H.room('irondoor', 'The Iron Doors', [-24, -118, 92, 30, 14, -32], { ...deep, floor: '#45454a', wall: '#4a4a50', glow: 0.6, book: 2, notes: [
+    [2, 'A forgotten passage slopes down and down, and opens into something that feels far more like a prison than a library: a long, cold hall with iron doors lining both walls, one after another, every one bolted shut.'],
+    [2, 'At the far end stands the largest door of all. The scratches in the metal are on this side. Whatever is behind these doors has been left alone for a very long time.'],
   ] });
-  put(F.ironDoor(), 15.4, 0, -N); put(F.torch(), 0, -13.6); put(F.bone(), 6, 8, 1).rotation.z = N; put(F.bone(), -4, -6, 2).rotation.z = N;
+  // cell doors down both long walls, each with a barred slot, and a torch between every other pair
+  each(7, (i) => {
+    const x = -36 + i * 12;
+    for (const [z, turn, slot] of [[-14.55, 0, -14.08], [14.55, PI, 14.08]]) {
+      put(F.ironDoor(), x, z, turn).scale.setScalar(0.85);
+      put(b(2.4, 1.3, 0.05, '#050506'), x, slot, turn, 7.4); put(F.bars(2.4, 1.3), x, slot + (turn ? -0.08 : 0.08), turn, 7.4);
+    }
+    if (i < 6 && i % 2 === 0) { put(F.torch(), x + 6, -14.4); put(F.torch(), x + 6, 14.4, PI); }
+  });
+  put(F.ironDoor(), 45.4, 0, -N).scale.set(1.25, 1.1, 1.2);
+  put(F.bone(), 30, 6, 1).rotation.z = N; put(F.bone(), -8, -5, 2).rotation.z = N; put(F.bone(), 14, 9, 0.5).rotation.z = N;
 
   // --- Celaena's suite
   put = H.room('foyer', 'Celaena’s Rooms: the Foyer', [58, 96, 28, 24, 14], { ...soft, notes: [
@@ -470,7 +484,7 @@ function castle(can) {
   put(F.counter(14), -8, -19.6); put(F.table(12, 5), 0, 0); put(F.candles(), 0, 0, 0, 3); each(2, (i) => put(F.cot('#e4e2dc'), 14 + i * 6, 12)); put(F.shelf(10, 9, 91), -23.2, 6, N); put(F.shelf(10, 9, 92), 10, 20.2, PI); each(4, (i) => put(F.plant(), -18 + i * 5, 17).scale.setScalar(0.5));
 
   for (const [a, c, o] of [['courtyard', 'hall', { w: 9 }], ['courtyard', 'gardens'], ['courtyard', 'kennels'], ['hall', 'throne', { w: 9 }], ['hall', 'training'], ['hall', 'foyer'], ['throne', 'gallery', { at: 20 }], ['throne', 'council'], ['throne', 'ballroom'],
-    ['council', 'dorian'], ['dorian', 'chaol'], ['council', 'nehemia'], ['ballroom', 'library', { w: 8 }], ['library', 'training', { w: 8 }], ['library', 'stackstair'], ['stackstair', 'lower'], ['lower', 'irondoor', { w: 5, h: 8.6 }],
+    ['council', 'dorian', { w: 5, h: 9 }], ['nehemia', 'chaol'], ['council', 'nehemia'], ['ballroom', 'library', { w: 8 }], ['library', 'training', { w: 8 }], ['library', 'stackstair'], ['stackstair', 'lower'], ['lower', 'irondoor', { w: 5, h: 8.6 }],
     ['foyer', 'gaming'], ['foyer', 'dining'], ['gaming', 'bedroom'], ['bedroom', 'bath'], ['bedroom', 'stair1', { w: 5, h: 8.8, color: '#4a4a4e', frame: '#33231a' }], ['stair1', 'cross', { w: 5, h: 9 }], ['cross', 'tomb', { w: 5, h: 9 }], ['cross', 'sewer', { w: 5, h: 9 }], ['cross', 'spy', { w: 4.6, h: 8.6 }],
     ['training', 'dungeon'], ['dungeon', 'healers']]) H.link(a, c, o);
 
@@ -617,8 +631,12 @@ function mistward(can) {
   put = H.room('room', 'Celaena’s Room', [44, 16, 20, 18, 11], { floor: '#6b5a48', floorKind: 'planks', glow: 0.7, notes: [[3, 'A narrow cot, a small window and no fire. Not much of a welcome.']] });
   put(F.cot('#5a544a'), 5, -3); put(F.table(3, 3), -4, -6); put(F.candles(), -4, -6, 0, 3); put(b(3, 4, 0.3, glow('#aebcc0', 0.8)), 9.8, 2, -N, 4); put(b(3, 2, 2, '#4a3a2c'), 4, 6.6);
 
-  put = H.room('rowan', 'Rowan’s Rooms', [52, -22, 36, 28, 13], { floor: '#6b5a48', floorKind: 'planks', notes: [[3, 'A worktable, a hearth and a bed, and nothing that could be called decoration.']] });
-  put(F.table(12, 5, '#4a3a2c'), 2, -2); put(F.chair('#4a3a2c', '#3a4a3a'), 2, 2, PI); put(F.hearth(9), 17.2, -2, -N); put(F.bed('#3a4a3a'), -8, -8); put(F.rack(), 6, 13.5, PI); put(F.rug(12, 8, '#3a4a3a'), 4, 4); put(b(3, 5, 0.3, glow('#aebcc0', 0.8)), 4, -13.8, 0, 4);
+  put = H.room('rowan', 'Rowan’s Rooms', [52, -22, 36, 28, 13], { floor: '#6b5a48', floorKind: 'planks', notes: [[3, 'A narrow cot, a worktable covered in maps, weapons within reach, and a fire. Nothing that could be called decoration.']] });
+  // a soldier's room: narrow cot, a trunk, a worktable under the window strewn with maps, weapons, a fire
+  put(F.cot('#3a4a3a'), -14.6, -6); put(b(4, 2.2, 2.6, '#4a3a2c'), -14.6, 2.6); put(b(4.2, 0.3, 2.8, '#33231a'), -14.6, 2.6, 0, 2.2);
+  put(F.table(9, 3.8, '#4a3a2c'), 1, -11.6); put(F.chair('#4a3a2c', '#4a3a2c'), 1, -8.4, PI); put(F.window(4, 7, '#3a4a3a'), 1, -13.8, 0, 5);
+  put(b(3.2, 0.04, 2.2, '#e6d9b8'), -1.4, -11.6, 0.15, 3); put(b(2.4, 0.04, 1.8, '#d9caa4'), 1.6, -11.2, -0.2, 3.02); put(b(0.25, 0.12, 2.6, '#c9ccd0', 0, 0, 0, { metalness: 0.9, roughness: 0.25 }), 4, -11.4, 0.5, 3); put(F.candles(), 4.6, -12.4, 0, 3);
+  put(F.hearth(9), 17.2, -2, -N); put(b(6, 0.08, 4.4, '#6a5a46'), 11, -2); put(F.rack(), -2, 13.5, PI); put(F.rack(), 8, 13.5, PI); put(F.barrel(), 15, 11);
 
   put = H.room('walls', 'The Battlements', [79, 60, 30, 50, 6, 12], { sky: true, notes: [[3, 'From up here: forest, mist, the Cambrian Mountains, and the ring of ward-stones that has kept the fortress hidden for centuries.']] });
   each(5, (i) => put(b(3, 2.4, 2, '#8f918c'), 13.6, -20 + i * 10, 0, 6)); put(F.rack(), 0, -24.5); put(F.barrel(), -10, 20);
@@ -734,4 +752,89 @@ function tavern(can) {
   return H.done();
 }
 
-export const INTERIORS = { castle, apartment, keep, omega, mistward, mines, silent, vaults, theater, tavern };
+// ---- Maeve's palace, Doranelle ------------------------------------------------------------------------------------
+function maeve(can) {
+  const H = new House(can, { floor: '#e4e1d8', wall: '#efece4', floorKind: 'tiles', wallKind: 'stone', ceil: '#e8e4da', light: '#eef6ff', book: 3 });
+  const pale = M('#eceae2', { metalness: 0.15, roughness: 0.35 }), orb = glow('#e6f2ff', 2.2);
+  let put = H.room('approach', 'The Colonnade', [0, 62, 44, 30, 16], { sky: true, notes: [[3, 'A colonnade of pale stone open to the air. Below it, the sound of the rivers that run through Doranelle.']] });
+  for (const sx of [-1, 1]) { each(3, (i) => put(F.pillar(15, 1.2, '#eeebe2'), sx * 16, -9 + i * 9)); each(2, (i) => put(F.plant(), sx * 20, -6 + i * 12)); }
+  put(F.rug(8, 26, '#2f5a5a'), 0, 0);
+
+  put = H.room('hall', 'Maeve’s Throne Room', [0, -5, 52, 90, 30], { notes: [
+    [3, 'The throne room of the Fae Queen: a long, cool hall of pale stone. At its far end, raised on its dais, is the throne from which Maeve receives those who come to Doranelle.'],
+  ] });
+  put(F.throne(pale), 0, -37); put(F.rug(8, 62, '#2f5a5a'), 0, 4);
+  for (const sx of [-1, 1]) {
+    each(5, (i) => { put(F.pillar(28, 1.5, '#eeebe2'), sx * 13, -28 + i * 15); put(F.window(5, 18), sx * 25.8, -30 + i * 15, -sx * N, 7); });
+    each(3, (i) => put(ball(1.1, orb), sx * 7, -20 + i * 22, 0, 22));
+    put(F.plant(), sx * 12, -41); put(F.plant(), sx * 20, 40);
+  }
+  each(2, (i) => put(F.window(6, 20), -10 + i * 20, -44.8, 0, 6));
+  H.link('approach', 'hall', { w: 10, h: 14 });
+  return H.done();
+}
+
+// ---- The cave near Mistward -----------------------------------------------------------------------------------------
+// Not built from boxes: one rough dome of rock over an uneven floor, open at the mouth. The dome is drawn from the
+// inside only, like every other wall here, so from above you look straight in.
+function cave(can) {
+  const H = new House(can, { bare: true, dark: true, glow: 0.5, light: '#c9d8e6', book: 3 });
+  H.room('cave', 'The Cave', [0, 2.5, 34, 92, 18], { notes: [
+    [3, 'Grey daylight and mist reach a little way in from the mouth, and then stop. Beyond is wet rock, stalactites and a pool of black water, too dark to see the far side of. This is where Celaena and Rowan fought.'],
+  ] });
+
+  const S = 57, cz = 2.5, RX = 30, RZ = 54, RY = 21, MOUTH = 0.34; // dome radii, and half-width (radians) of the mouth
+  const tint = (g, base, k) => { const p = g.attributes.position, col = new Float32Array(p.count * 3), c = new THREE.Color(), dark = new THREE.Color('#23241f'), moss = new THREE.Color('#3f5233');
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), n = fbm(x * 0.09 + y * 0.05, z * 0.09 - y * 0.04, 3, S + k);
+      c.set(base).multiplyScalar(0.7 + n * 0.6); c.lerp(dark, Math.max(0, 0.6 - y / RY) * 0.5); if (z > 30 && n > 0.55) c.lerp(moss, 0.6); col.set([c.r, c.g, c.b], i * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals(); };
+  const rockMat = (side) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, side });
+
+  // the dome: an upper hemisphere with a gore cut out toward +z for the mouth, pushed about by noise
+  const dome = new THREE.SphereGeometry(1, 72, 22, Math.PI / 2 + MOUTH, Math.PI * 2 - MOUTH * 2, 0, Math.PI / 2), dp = dome.attributes.position;
+  for (let i = 0; i < dp.count; i++) {
+    const ux = dp.getX(i), uy = dp.getY(i), uz = dp.getZ(i), n = fbm(ux * 2.6 + 9, uz * 2.6 + uy * 2, 4, S), n2 = fbm(uz * 6, ux * 6 + uy * 3, 2, S + 3);
+    const k = 1 + n * 0.22 + (n2 - 0.5) * 0.08;
+    dp.setXYZ(i, ux * RX * k, uy < 0.04 ? -0.5 : uy * RY * (0.85 + n * 0.35), uz * RZ * k + cz);
+  }
+  tint(dome, '#6a6b63', 1);
+  const shell = new THREE.Mesh(dome, rockMat(THREE.BackSide)); shell.receiveShadow = true; H.group.add(shell);
+
+  // the floor: a rough oval of rock, a little bumpy, sloping slightly toward the back
+  // a fine grid squeezed into an oval, so it can carry bumps and a hollow for the pool
+  const PX = 8, PZ = -24, PRX = 9, PRZ = 13, poolAt = (x, z) => Math.hypot((x - PX) / PRX, (z - PZ) / PRZ);
+  const floor = new THREE.PlaneGeometry(2, 2, 48, 96); floor.rotateX(-Math.PI / 2);
+  const fp = floor.attributes.position;
+  for (let i = 0; i < fp.count; i++) {
+    let ux = fp.getX(i), uz = fp.getZ(i); const r = Math.hypot(ux, uz); if (r > 1) { ux /= r; uz /= r; }
+    const x = ux * RX * 1.05, z = uz * RZ * 1.05 + cz, n = fbm(x * 0.15, z * 0.15, 3, S + 5), rr = Math.min(1, r);
+    let y = (n - 0.5) * 0.6 + rr ** 4 * 2.2;
+    const d = poolAt(x, z); if (d < 1.35) y = Math.min(y, -1.4 + Math.max(0, d - 0.85) * 2.8); // the hollow the water sits in
+    fp.setXYZ(i, x, y, z);
+  }
+  tint(floor, '#56574f', 2);
+  const fl = new THREE.Mesh(floor, rockMat(THREE.FrontSide)); fl.receiveShadow = true; H.group.add(fl); H.walls.push(fl);
+
+  // grey daylight beyond the mouth
+  const day = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.MeshBasicMaterial({ color: '#cdd6da' })); day.position.set(0, 14, RZ + cz + 14); day.rotation.y = Math.PI; H.group.add(day);
+
+  // rock teeth: stalactites hang from the dome where it actually is, stalagmites stand on the floor
+  const roof = (x, z) => RY * 0.95 * Math.sqrt(Math.max(0, 1 - (x / RX) ** 2 - ((z - cz) / RZ) ** 2));
+  const rockM = M('#5c5d56', { flatShading: true }), R = rng(S);
+  for (let i = 0; i < 46; i++) {
+    const x = (R() - 0.5) * RX * 1.4, z = cz + (R() - 0.5) * RZ * 1.5, top = roof(x, z);
+    if (top < 6 || z > 34) continue;
+    const h = 2 + R() * 4.5, m = mesh(new THREE.ConeGeometry(0.4 + R() * 0.7, h, 6), rockM); m.rotation.x = Math.PI; m.position.set(x, top - h / 2 + 0.6, z); H.group.add(m);
+  }
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 48), M('#16323a', { roughness: 0.04, metalness: 0.4, emissive: '#0c2a33', emissiveIntensity: 0.6 })); pool.rotation.x = -N; pool.scale.set(PRX * 1.08, PRZ * 1.08, 1); pool.position.set(PX, -0.25, PZ); H.group.add(pool);
+  H.solids.push({ x0: PX - PRX * 0.8, x1: PX + PRX * 0.8, z0: PZ - PRZ * 0.8, z1: PZ + PRZ * 0.8, y: 0 }); // no wading in
+  let put = (thing, x, z) => { thing.position.set(x, 0, z); H.group.add(thing); return thing; };
+  for (let i = 0; i < 16; i++) { const x = (R() - 0.5) * 32, z = -40 + R() * 68; if (Math.abs(x) < 7 || poolAt(x, z) < 1.4) continue; const h = 1.5 + R() * 3.5; const m = mesh(new THREE.ConeGeometry(0.7 + R() * 0.6, h, 6), rockM); put(m, x, z).position.y = h / 2; H.solids.push({ x0: x - 1, x1: x + 1, z0: z - 1, z1: z + 1, y: 0 }); }
+  for (const [x, z, r] of [[-16, -30, 3.6], [-17, 4, 3], [16, 18, 3.2], [-12, 26, 2.4], [17, -6, 2.6], [12, -40, 3.4], [-6, -42, 3]]) {
+    const m = mesh(new THREE.DodecahedronGeometry(r, 0), rockM); m.scale.set(1.3, 0.8, 1.1); m.rotation.set(r, r * 2, 0); put(m, x, z).position.y = r * 0.5; H.solids.push({ x0: x - r * 1.2, x1: x + r * 1.2, z0: z - r, z1: z + r, y: 0 });
+  }
+  put(F.bone(), 10, 2).rotation.z = N; put(F.bone(), -5, -14).rotation.z = N;
+  return H.done();
+}
+
+export const INTERIORS = { castle, apartment, keep, omega, mistward, mines, silent, vaults, theater, tavern, maeve, cave };

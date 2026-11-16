@@ -269,12 +269,13 @@ export const SCENES = {
     landmarks: [
       { type: 'mistward', id: 'fortress', name: 'Mistward Fortress', at: [0, 0], clear: 75, book: 3, interior: 'mistward', notes: [[3, 'Grey stone walls and towers, kitchens and training grounds, sheltered by a ring of ward-stones older than the fortress itself.']] },
       { type: 'label', id: 'wards', name: 'The Ward-stones', at: [0, 118], book: 3, notes: [[3, 'Carved standing stones that guard the approach.']] },
+      { type: 'cave', id: 'cave', name: 'The Cave', at: [260, -40], face: -1.42, clear: 34, book: 3, interior: 'cave', notes: [[3, 'A cave up in the mountains beyond Mistward, where Celaena and Rowan fought a creature in the dark.']] },
     ],
   },
   doranelle: {
     radius: 240, seed: 15, palette: PAL.fae, river: { w: 20, amp: 60 }, river2: true, biome: 'lush', forest: 1.2,
     hills: [[-40, -120, 18, 80]],
-    landmarks: [{ type: 'castle', id: 'palace', name: 'Maeve’s Palace', at: [-40, -120], clear: 65, book: 3, tone: 'pale', notes: [[3, 'The seat of the Fae Queen.']] }],
+    landmarks: [{ type: 'castle', id: 'palace', name: 'Maeve’s Palace', at: [-40, -120], clear: 65, book: 3, tone: 'pale', interior: 'maeve', notes: [[3, 'The seat of the Fae Queen. Step inside to see her throne room.']] }],
   },
   banjali: { radius: 200, seed: 23, palette: PAL.sand, walls: true, biome: 'dry', river: { w: 10, amp: 40 },
     hills: [[40, -90, 14, 80]],
@@ -288,6 +289,8 @@ const tower = (name) => [{ type: 'clockTower', id: 'tower', name: 'The Clock Tow
   [3, 'It is the twin of the obsidian tower in the gardens of the glass castle.'],
 ] }];
 const TOWERS = { noll: tower('Noll'), amaroth: tower('Amaroth') };
+// the towers show on the continent map too, and are mentioned when the town is selected
+for (const p of PLACES) if (TOWERS[p.id]) { p.tower = true; p.notes = [[1, `A small town in ${p.realm.replace(/^The /, 'the ')}. A clock tower of black stone stands over it.`]]; }
 
 // Generic scene for places without a hand-made one.
 export function sceneFor(p) {

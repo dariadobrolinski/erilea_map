@@ -196,6 +196,20 @@ const LANDMARKS = {
     } };
   },
   label() { return { group: new THREE.Group(), top: 22 }; },
+  // a mossy outcrop of boulders with a black cave mouth in its face (the mouth looks toward +z, turned by lm.face)
+  cave(lm) {
+    const g = new THREE.Group(), r2 = rng(lm.at[0] * 7 + lm.at[1]), stone = std('#6f706a', { flatShading: true }), moss = std('#4f6b3c', { flatShading: true });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2, d = i ? 10 + r2() * 8 : 0, s = i ? 7 + r2() * 6 : 16;
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), r2() < 0.35 ? moss : stone);
+      m.position.set(Math.cos(a) * d, s * 0.55, Math.sin(a) * d - 4); m.scale.set(1.2, 0.8 + r2() * 0.4, 1); m.rotation.set(r2() * 3, r2() * 3, r2() * 3);
+      m.castShadow = m.receiveShadow = true; g.add(m);
+    }
+    const mouth = new THREE.Mesh(new THREE.CircleGeometry(6, 18, 0, Math.PI), new THREE.MeshBasicMaterial({ color: '#050506' }));
+    mouth.position.set(0, 0.2, 10.6); mouth.scale.set(1, 1.25, 1); g.add(mouth);
+    g.rotation.y = lm.face ?? 0;
+    return { group: g, top: 30 };
+  },
   chain() {
     const g = new THREE.Group(), stone = std('#8d8678'), capM = std('#4a4038');
     g.add(tower(8, 34, stone, capM, 0, -150), tower(8, 34, stone, capM, 0, 150));
@@ -390,6 +404,7 @@ export function buildMarkers(places, groundAt) {
     let mini = null;
     if (pl.id === 'rifthold') mini = LANDMARKS.glassCastle().group, mini.scale.setScalar(0.05), mini.position.set(px - 5, y0, pz - 5);
     else if (pl.kind === 'capital' || pl.kind === 'fortress') mini = LANDMARKS.castle({ tone: dark ? 'dark' : pl.realm === 'Eyllwe' ? 'sand' : pl.kind === 'capital' ? 'pale' : 'default' }).group, mini.scale.setScalar(0.07), mini.position.set(px, y0, pz - (pl.kind === 'capital' ? 4 : 0));
+    if (pl.tower) { const ct = LANDMARKS.clockTower().group; ct.scale.setScalar(0.065); ct.position.set(px + 1.2, y0, pz - 0.9); g.add(ct); }
     if (mini) g.add(mini);
     group.add(g); byId.set(pl.id, g);
   }

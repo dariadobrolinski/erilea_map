@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>The Atlas of Erilea</title>
+<title>Interactive Map of Erilea</title>
 <meta name="description" content="A spoiler-safe, explorable 3D atlas of the world of Throne of Glass.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&display=swap" rel="stylesheet">
@@ -19,7 +20,7 @@
 <header id="top">
   <button id="back" hidden></button>
   <div class="brand">
-    <h1>The Atlas of Erilea</h1>
+    <h1>Interactive Map of Erilea</h1>
     <nav id="crumbs"></nav>
   </div>
   <div class="tools">
@@ -42,6 +43,7 @@
   <h2><button id="pToggle" aria-expanded="false" aria-controls="pNotes"><span id="pName"></span><span class="more"><span id="pMore">Read more</span><i class="chev" aria-hidden="true"></i></span></button></h2>
   <div id="pNotes" hidden></div>
   <div id="pActions"></div>
+  <p class="soon" id="pSoon" hidden></p>
 </aside>
 
 <footer id="hint">Drag to travel &middot; right-drag to turn &middot; scroll to descend &middot; click a name to learn more</footer>
@@ -56,6 +58,7 @@
 <div id="gate" hidden>
   <div class="gate-inner">
     <p class="veil-kicker">Throne of Glass</p>
+    <p class="gate-author">by Sarah J. Maas</p>
     <h2 class="gate-title">How far have you read?</h2>
     <p class="veil-sub">The atlas only shows what you have already reached, and keeps the rest sealed. You can change this any time from the top bar.</p>
     <div id="gateBooks" role="group" aria-label="Books"></div>
