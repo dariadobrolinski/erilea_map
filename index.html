@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Atlas of Erilea</title>
+<meta name="description" content="A spoiler-safe, explorable 3D atlas of the world of Throne of Glass.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+<div id="labels"></div>
+<div id="vignette"></div>
+
+<header id="top">
+  <button id="back" hidden></button>
+  <div class="brand">
+    <h1>The Atlas of Erilea</h1>
+    <nav id="crumbs"></nav>
+  </div>
+  <div class="tools">
+    <label class="progress">I&rsquo;ve read up to
+      <select id="progress"></select>
+    </label>
+    <label class="progress"><input type="checkbox" id="ab"> and The Assassin&rsquo;s Blade</label>
+    <button id="mood" title="Change the time of day">Day</button>
+    <button id="listBtn" title="Browse places">Places</button>
+  </div>
+</header>
+
+<aside id="list" hidden>
+  <input id="search" type="search" placeholder="Find a place&hellip;" autocomplete="off">
+  <div id="listBody"></div>
+</aside>
+
+<aside id="panel" hidden>
+  <p class="kicker" id="pKicker"></p>
+  <h2><button id="pToggle" aria-expanded="false" aria-controls="pNotes"><span id="pName"></span><span class="more"><span id="pMore">Read more</span><i class="chev" aria-hidden="true"></i></span></button></h2>
+  <div id="pNotes" hidden></div>
+  <div id="pActions"></div>
+</aside>
+
+<footer id="hint">Drag to travel &middot; right-drag to turn &middot; scroll to descend &middot; click a name to learn more</footer>
+
+<div id="veil" class="on">
+  <div class="veil-inner">
+    <p class="veil-kicker">Throne of Glass</p>
+    <p class="veil-title">Erilea</p>
+    <p class="veil-sub" id="veilText">Charting the continent&hellip;</p>
+  </div>
+</div>
+<div id="gate" hidden>
+  <div class="gate-inner">
+    <p class="veil-kicker">Throne of Glass</p>
+    <h2 class="gate-title">How far have you read?</h2>
+    <p class="veil-sub">The atlas only shows what you have already reached, and keeps the rest sealed. You can change this any time from the top bar.</p>
+    <div id="gateBooks" role="group" aria-label="Books"></div>
+    <label class="gate-ab"><input type="checkbox" id="gateAb"> I&rsquo;ve also read The Assassin&rsquo;s Blade</label>
+    <p class="gate-note">Created by <a href="https://dariadobrolinski.me/" target="_blank" rel="noopener">Daria Dobrolinski</a>.<br>Any missing places or sealed books are because I&rsquo;m still reading the series!</p>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
