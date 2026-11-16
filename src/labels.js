@@ -33,7 +33,7 @@ export class Labels {
     this.items.sort((a, b) => b.pri - a.pri);
   }
 
-  update(camera, dist, W, H) {
+  update(camera, dist, W, H, inside = false) { // inside: only show labels that fit wholly on screen
     this.occlude(camera);
     const placed = [], v = this.v;
     for (const it of this.items) {
@@ -45,7 +45,8 @@ export class Labels {
       }
       if (vis) {
         const r = [x - it.w / 2 - 4, y - it.h - 2, x + it.w / 2 + 4, y + 2];
-        for (const q of placed) if (r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]) { vis = false; break; }
+        if (inside && (r[0] < 0 || r[2] > W)) vis = false;
+        if (vis) for (const q of placed) if (r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1]) { vis = false; break; }
         if (vis) placed.push(r);
       }
       if (vis) it.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;

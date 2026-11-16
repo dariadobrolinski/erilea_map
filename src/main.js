@@ -10,6 +10,7 @@ import { Labels } from './labels.js';
 import { clamp, ease } from './util.js';
 
 const $ = (id) => document.getElementById(id);
+const narrow = matchMedia('(max-width: 720px)'), coarse = matchMedia('(pointer: coarse)');
 const store = {
   get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -66,6 +67,8 @@ let ab = store.get('tog-ab', '1') === '1';
 let world, markers, local = null, here = null, room = null; // here = the place we are in; room = the interior we are in
 let cityView = null, walk = null; // walk = first-person state while standing in a room
 const keys = new Set();
+const joy = { x: 0, y: 0, id: null }; // on-screen walking pad
+let sheet = 0; // how far the view is nudged up to clear the bottom sheet on phones
 let fly = null, worldView = null;
 const labels = new Labels($('labels'));
 const can = (b) => (b === 0 ? ab : b <= progress);
@@ -139,12 +142,12 @@ function showPanel(kicker, name, notes, actions, soon) {
   }));
   $('pSoon').textContent = soon || ''; $('pSoon').hidden = !soon;
   $('pToggle').disabled = !$('pNotes').childElementCount;
-  setNotesOpen(notesOpen && !$('pToggle').disabled);
+  setNotesOpen(notesOpen && !narrow.matches && !$('pToggle').disabled);
   $('pActions').replaceChildren(...actions.map(([text, fn, primary]) => {
     const b = document.createElement('button'); b.textContent = text; b.onclick = fn; if (primary) b.className = 'primary';
     return b;
   }));
-  $('panel').hidden = false; $('list').hidden = true;
+  $('panel').hidden = false; $('list').hidden = true; $('hint').classList.add('gone');
 }
 const KIND = { capital: 'Capital', city: 'City', town: 'Town', fortress: 'Stronghold', mine: 'Labour camp' };
 function selectPlace(p) {
@@ -171,7 +174,7 @@ const veil = (on, text = '') => new Promise((res) => { $('veilText').textContent
 function crumbs() {
   const c = $('crumbs'), back = $('back'); c.replaceChildren();
   back.hidden = !here;
-  if (here) { back.textContent = room ? `Back to ${here.name}` : 'Back to Erilea'; back.onclick = room ? exitRoom : leave; }
+  if (here) { back.textContent = walk ? 'All rooms' : room ? `Back to ${here.name}` : 'Back to Erilea'; back.onclick = walk ? () => stopWalk() : room ? exitRoom : leave; }
   if (!here) { c.textContent = 'A spoiler-safe atlas of Throne of Glass by Sarah J. Maas'; return; }
   const b = document.createElement('button'); b.textContent = 'Erilea'; b.onclick = leave;
   const cur = document.createElement('b'); cur.textContent = room ? room.name : here.name;
@@ -218,7 +221,7 @@ function walkPanel() {
     ['‹ Previous room', () => startWalk(rooms[(i - 1 + rooms.length) % rooms.length])],
     ['Next room ›', () => startWalk(rooms[(i + 1) % rooms.length]), true],
     ['See all rooms', stopWalk],
-  ], 'Drag to look around. W A S D or the arrow keys to walk, Shift to hurry. Doorways and stairs lead on to the next room.');
+  ], coarse.matches ? 'Drag to look around; use the pad to walk. Doorways and stairs lead on.' : 'Drag to look around. W A S D or the arrow keys to walk, Shift to hurry. Doorways and stairs lead on to the next room.');
   const sky = poi.sky ? (mood === 'Night' ? '#101b2e' : mood === 'Dusk' ? '#d6a184' : '#9cc4dc') : '#0b1013';
   INT.scene.background.set(sky); INT.scene.fog.color.set(sky);
   INT.sun.intensity = poi.sky ? (mood === 'Night' ? 0.5 : 2.2) : poi.dark ? 0.12 : 0.5; INT.hemi.intensity = poi.sky ? 0.9 : poi.dark ? 0.26 : 0.5;
@@ -234,11 +237,13 @@ function startWalk(poi, yaw = 0) {
     if (px > B.x0 + 2 && px < B.x1 - 2 && pz > B.z0 + 2 && pz < B.z1 - 2 && !room.solids.some((s) => inSolid(s, px, pz, B.y))) { camera.position.set(px, B.y + EYE, pz); break search; }
   }
   labels.set([]); $('hint').classList.add('gone');
-  walkPanel();
+  $('joy').hidden = !coarse.matches;
+  walkPanel(); crumbs();
 }
 function stopWalk(overview = true) {
   if (!walk) return;
   walk = null; setLens(40, 1); controls.enabled = true; INT.sun.intensity = 1.5; INT.hemi.intensity = 0.75;
+  $('joy').hidden = true; joy.x = joy.y = 0; crumbs();
   INT.scene.background.set('#0b1013'); INT.scene.fog.color.set('#0b1013');
   if (overview && room) { snapTo(room.center, room.size * 1.25, 0.85, 0.25); localLabels(); $('panel').hidden = true; }
 }
@@ -312,7 +317,11 @@ function setupUI() {
   $('ab').checked = ab;
   $('ab').onchange = async () => { ab = $('ab').checked; store.set('tog-ab', ab ? '1' : '0'); if (here) await leave(); applyProgress(); };
   $('mood').onclick = () => { const k = Object.keys(MOODS); mood = k[(k.indexOf(mood) + 1) % k.length]; store.set('tog-mood', mood); applyMood(); };
-  $('listBtn').onclick = () => { $('list').hidden = !$('list').hidden; if (!$('list').hidden) $('search').focus(); };
+  const setMenu = (open) => { $('top').classList.toggle('menu-open', open); $('menuBtn').setAttribute('aria-expanded', open); measureTop(); };
+  $('menuBtn').onclick = () => setMenu(!$('top').classList.contains('menu-open'));
+  $('listBtn').onclick = () => { setMenu(false); $('list').hidden = !$('list').hidden; if (!$('list').hidden && !coarse.matches) $('search').focus(); };
+  $('pClose').onclick = () => { $('panel').hidden = true; };
+  setupTouch(setMenu);
   $('search').oninput = fillList;
   $('pToggle').onclick = () => setNotesOpen(!notesOpen);
   addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('list').hidden) $('list').hidden = true; else if (walk) stopWalk(); else if (!$('panel').hidden) $('panel').hidden = true; else if (room) exitRoom(); else leave(); } });
@@ -320,9 +329,16 @@ function setupUI() {
   addEventListener('keydown', (e) => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'SELECT') keys.add(e.key.toLowerCase()); });
   addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
   addEventListener('blur', () => keys.clear());
+  // Looking around on foot: track each pointer ourselves, since touch events carry no movementX.
+  const last = new Map();
+  canvas.addEventListener('pointerdown', (e) => last.set(e.pointerId, [e.clientX, e.clientY]));
+  for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, (e) => last.delete(e.pointerId));
   canvas.addEventListener('pointermove', (e) => {
-    if (!walk || !e.buttons) return;
-    walk.yaw -= e.movementX * 0.0045; walk.pitch = clamp(walk.pitch - e.movementY * 0.0045, -1.2, 1.2);
+    const l = last.get(e.pointerId);
+    if (l) last.set(e.pointerId, [e.clientX, e.clientY]);
+    if (!walk || !l || !e.buttons) return;
+    const k = e.pointerType === 'touch' ? 0.006 : 0.0045;
+    walk.yaw -= (e.clientX - l[0]) * k; walk.pitch = clamp(walk.pitch - (e.clientY - l[1]) * k, -1.2, 1.2);
   });
   // click the ground near a town to select it
   let down = null;
@@ -336,14 +352,14 @@ function setupUI() {
       ray.ray.at(t, p);
       const g = groundNow(p.x, p.z);
       if (p.y <= g + 0.2) {
-        if (room) return;
+        if (room) { if (narrow.matches) $('panel').hidden = true; return; }
         if (here) {
           const hit = local.pois.filter((o) => o.kind === 'landmark').find((o) => Math.hypot(o.focus.x - p.x, o.focus.z - p.z) < o.size * 0.6);
-          if (hit) selectPoi(hit);
+          if (hit) selectPoi(hit); else if (narrow.matches) $('panel').hidden = true;
         } else {
-          const lim = Math.max(8, camera.position.distanceTo(p) * 0.035);
+          const lim = Math.max(8, camera.position.distanceTo(p) * (coarse.matches ? 0.06 : 0.035));
           const hit = PLACES.filter(visible).map((o) => [Math.hypot(o.pos[0] - p.x, o.pos[1] - p.z), o]).filter(([d]) => d < lim).sort((a, b) => a[0] - b[0])[0];
-          if (hit) selectPlace(hit[1]);
+          if (hit) selectPlace(hit[1]); else if (narrow.matches) $('panel').hidden = true; // tapping empty land puts the sheet away
         }
         return;
       }
@@ -352,18 +368,64 @@ function setupUI() {
   });
 }
 
+// ---- touch: twist to turn, walking pad, header size ------------------------------------------------
+function measureTop() { document.documentElement.style.setProperty('--top', $('top').offsetHeight + 'px'); }
+function setupTouch(setMenu) {
+  const touches = new Map(); let angle = null;
+  const twist = () => { const [a, b] = [...touches.values()]; return Math.atan2(b[1] - a[1], b[0] - a[0]); };
+  canvas.addEventListener('pointerdown', (e) => {
+    setMenu(false); $('list').hidden = true;
+    if (e.pointerType !== 'touch') return;
+    touches.set(e.pointerId, [e.clientX, e.clientY]); angle = touches.size === 2 ? twist() : null;
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, [e.clientX, e.clientY]);
+    if (touches.size !== 2 || angle === null || walk || !controls.enabled) return;
+    let d = twist() - angle; angle += d;
+    d = Math.atan2(Math.sin(d), Math.cos(d));
+    controls._rotateLeft(-d); // the map turns with the fingers
+  });
+  for (const t of ['pointerup', 'pointercancel']) canvas.addEventListener(t, (e) => { touches.delete(e.pointerId); angle = touches.size === 2 ? twist() : null; });
+
+  const pad = $('joy'), knob = pad.querySelector('i');
+  const move = (e) => {
+    const r = pad.getBoundingClientRect(), R = r.width / 2;
+    let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R; const m = Math.hypot(x, y);
+    if (m > 1) { x /= m; y /= m; }
+    joy.x = x; joy.y = y; knob.style.transform = `translate(${x * R * 0.6}px, ${y * R * 0.6}px)`;
+  };
+  pad.addEventListener('pointerdown', (e) => { joy.id = e.pointerId; pad.setPointerCapture(e.pointerId); move(e); });
+  pad.addEventListener('pointermove', (e) => { if (e.pointerId === joy.id) move(e); });
+  for (const t of ['pointerup', 'pointercancel']) pad.addEventListener(t, (e) => { if (e.pointerId !== joy.id) return; joy.id = null; joy.x = joy.y = 0; knob.style.transform = ''; });
+  measureTop();
+}
+
 // ---- frame loop --------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  camera.aspect = innerWidth / innerHeight; sheet = -1; // forces the view offset to be re-applied
+  measureTop();
+}
+// On phones the bottom sheet covers the lower part of the screen, so frame the scene in the space above it.
+function frameAboveSheet() {
+  const h = narrow.matches && !$('panel').hidden ? $('panel').offsetHeight : 0;
+  document.documentElement.style.setProperty('--sheet', h + 'px');
+  const want = Math.min(h, innerHeight * 0.6) / 2;
+  const next = sheet < 0 ? want : Math.abs(want - sheet) < 0.5 ? want : sheet + (want - sheet) * 0.15;
+  if (next === sheet) return;
+  sheet = next;
+  if (sheet < 0.5) camera.clearViewOffset(); else camera.setViewOffset(innerWidth, innerHeight, 0, sheet, innerWidth, innerHeight);
 }
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
   if (walk) {
-    const f = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
-    const r = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
-    const sp = keys.has('shift') ? 26 : 14, sy = Math.sin(walk.yaw), cy = Math.cos(walk.yaw), len = Math.hypot(f, r) || 1, ease2 = Math.min(1, dt * 9);
+    let f = (keys.has('w') || keys.has('arrowup') ? 1 : 0) - (keys.has('s') || keys.has('arrowdown') ? 1 : 0);
+    let r = (keys.has('d') || keys.has('arrowright') ? 1 : 0) - (keys.has('a') || keys.has('arrowleft') ? 1 : 0);
+    let sp = keys.has('shift') ? 26 : 14;
+    if (!f && !r && joy.id !== null) { const m = Math.hypot(joy.x, joy.y); if (m > 0.12) { f = -joy.y; r = joy.x; sp = 22; } }
+    const sy = Math.sin(walk.yaw), cy = Math.cos(walk.yaw), len = Math.max(1, Math.hypot(f, r)), ease2 = Math.min(1, dt * 9);
     walk.vx += (((-sy * f + cy * r) / len) * sp - walk.vx) * ease2; walk.vz += (((-cy * f - sy * r) / len) * sp - walk.vz) * ease2;
     const v = Math.hypot(walk.vx, walk.vz), px = camera.position.x, pz = camera.position.z, nx = px + walk.vx * dt, nz = pz + walk.vz * dt;
     const hit = stepTo(nx, nz) || stepTo(nx, pz) || stepTo(px, nz);
@@ -394,8 +456,9 @@ function frame() {
   if (!here) world.update(time); else if (!room) local.update?.(time); else room.update?.(time, walk?.poi, walk ? camera.position : null);
   const S = room ? INT : here ? LOC : W;
   if (here && !room) { S.sun.target.position.copy(controls.target).setY(0); S.sun.position.set(...MOODS[mood].dir).multiplyScalar(1200).add(S.sun.target.position); }
+  frameAboveSheet();
   renderer.render(S.scene, camera);
-  labels.update(camera, camera.position.distanceTo(controls.target), innerWidth, innerHeight);
+  labels.update(camera, camera.position.distanceTo(controls.target), innerWidth, innerHeight, narrow.matches);
   requestAnimationFrame(frame);
 }
 

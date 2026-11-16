@@ -20,7 +20,7 @@
 <header id="top">
   <button id="back" hidden></button>
   <div class="brand">
-    <h1>Interactive Map of Erilea</h1>
+    <h1><span class="long">Interactive Map of </span>Erilea</h1>
     <nav id="crumbs"></nav>
   </div>
   <div class="tools">
@@ -30,6 +30,7 @@
     <label class="progress"><input type="checkbox" id="ab"> and The Assassin&rsquo;s Blade</label>
     <button id="mood" title="Change the time of day">Day</button>
     <button id="listBtn" title="Browse places">Places</button>
+    <button id="menuBtn" aria-expanded="false" aria-controls="top" title="Reading progress and time of day">Settings</button>
   </div>
 </header>
 
@@ -39,6 +40,7 @@
 </aside>
 
 <aside id="panel" hidden>
+  <button id="pClose" aria-label="Close"></button>
   <p class="kicker" id="pKicker"></p>
   <h2><button id="pToggle" aria-expanded="false" aria-controls="pNotes"><span id="pName"></span><span class="more"><span id="pMore">Read more</span><i class="chev" aria-hidden="true"></i></span></button></h2>
   <div id="pNotes" hidden></div>
@@ -46,7 +48,8 @@
   <p class="soon" id="pSoon" hidden></p>
 </aside>
 
-<footer id="hint">Drag to travel &middot; right-drag to turn &middot; scroll to descend &middot; click a name to learn more</footer>
+<footer id="hint"><span class="mouse">Drag to travel &middot; right-drag to turn &middot; scroll to descend &middot; click a name to learn more</span><span class="touch">Drag to travel &middot; pinch to zoom &middot; twist or two-finger drag to turn &middot; tap a name</span></footer>
+<div id="joy" hidden><i></i></div>
 
 <div id="veil" class="on">
   <div class="veil-inner">
